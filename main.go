@@ -54,12 +54,12 @@ func getCPUName() string {
 	return strings.Split(unique[0], ":")[1]
 }
 
-func readCPUData() ([]CpuData, error) {
+func readCPUData() []CpuData {
 	var cpus []CpuData
 	file, err := os.Open("/proc/stat")
 
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 		os.Exit(1)
 	}
 
@@ -138,7 +138,7 @@ func readCPUData() ([]CpuData, error) {
 	}
 
 	file.Close()
-	return cpus, fmt.Errorf("no CPU data found")
+	return cpus
 }
 
 func calcCPUUsage(prev, curr CpuData) float64 {
@@ -195,9 +195,9 @@ func readMemData() (MemData, error) {
 
 func main() {
 	for {
-		prev, _ := readCPUData()
+		prev := readCPUData()
 		time.Sleep(1 * time.Second)
-		curr, _ := readCPUData()
+		curr := readCPUData()
 		curr_mem, _ := readMemData()
 
 		fmt.Print("\033[H\033[2J")
