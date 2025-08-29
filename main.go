@@ -29,6 +29,14 @@ type MemData struct {
 	MemFree  int
 }
 
+func tryConvertToInt(value string) int {
+	result, err := strconv.Atoi(value)
+	if err != nil {
+		log.Printf("Error converting to integer: %v", err)
+		return 0
+	}
+	return result
+}
 func getCPUName() string {
 	var unique []string
 	file, err := os.Open("/proc/cpuinfo")
@@ -74,51 +82,15 @@ func readCPUData() []CpuData {
 		if strings.Contains(row, "cpu") {
 			data := strings.Split(row[4:], " ")
 
-			nicePeriod, err := strconv.Atoi(data[2])
-			if err != nil {
-				log.Printf("Error converting NicePeriod: %v", err)
-				nicePeriod = 0
-			}
-			userPeriod, err := strconv.Atoi(data[1])
-			if err != nil {
-				log.Printf("Error converting UserPeriod: %v", err)
-				userPeriod = 0
-			}
-			systemPeriod, err := strconv.Atoi(data[3])
-			if err != nil {
-				log.Printf("Error converting SystemPeriod: %v", err)
-				systemPeriod = 0
-			}
-			irqPeriod, err := strconv.Atoi(data[6])
-			if err != nil {
-				log.Printf("Error converting IrqPeriod: %v", err)
-				irqPeriod = 0
-			}
-			softIrqPeriod, err := strconv.Atoi(data[7])
-			if err != nil {
-				log.Printf("Error converting SoftIrqPeriod: %v", err)
-				softIrqPeriod = 0
-			}
-			stealPeriod, err := strconv.Atoi(data[8])
-			if err != nil {
-				log.Printf("Error converting StealPeriod: %v", err)
-				stealPeriod = 0
-			}
-			guestPeriod, err := strconv.Atoi(data[9])
-			if err != nil {
-				log.Printf("Error converting GuestPeriod: %v", err)
-				guestPeriod = 0
-			}
-			ioWaitPeriod, err := strconv.Atoi(data[5])
-			if err != nil {
-				log.Printf("Error converting IoWaitPeriod: %v", err)
-				ioWaitPeriod = 0
-			}
-			idlePeriod, err := strconv.Atoi(data[4])
-			if err != nil {
-				log.Printf("Error converting idlePeriod: %v", err)
-				idlePeriod = 0
-			}
+			nicePeriod := tryConvertToInt(data[2])
+			userPeriod := tryConvertToInt(data[1])
+			systemPeriod := tryConvertToInt(data[3])
+			irqPeriod := tryConvertToInt(data[6])
+			softIrqPeriod := tryConvertToInt(data[7])
+			stealPeriod := tryConvertToInt(data[8])
+			guestPeriod := tryConvertToInt(data[9])
+			ioWaitPeriod := tryConvertToInt(data[5])
+			idlePeriod := tryConvertToInt(data[4])
 
 			cpu_data := CpuData{
 				Name:          row[:5],
@@ -175,17 +147,11 @@ func readMemData() (MemData, error) {
 	data := strings.Split(string(bytes), "\n")
 	for _, row := range data {
 		if strings.HasPrefix(row, "MemTotal:") {
-			MemTotal, err := strconv.Atoi(strings.TrimSpace(strings.Trim(strings.TrimPrefix(row, "MemTotal:"), "kB")))
-			if err != nil {
-				log.Fatal(err)
-			}
+			MemTotal := tryConvertToInt(strings.TrimSpace(strings.Trim(strings.TrimPrefix(row, "MemTotal:"), "kB")))
 			result.MemTotal = MemTotal
 		}
 		if strings.HasPrefix(row, "MemFree:") {
-			MemFree, err := strconv.Atoi(strings.TrimSpace(strings.Trim(strings.TrimPrefix(row, "MemFree:"), "kB")))
-			if err != nil {
-				log.Fatal(err)
-			}
+			MemFree := tryConvertToInt(strings.TrimSpace(strings.Trim(strings.TrimPrefix(row, "MemFree:"), "kB")))
 			result.MemFree = MemFree
 		}
 	}
