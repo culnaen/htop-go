@@ -45,13 +45,19 @@ func openFile(path string) *os.File {
 	}
 	return file
 }
-func getCPUName() string {
-	var unique []string
-	file := openFile("/proc/cpuinfo")
+
+func readFile(file *os.File) []byte {
 	bytes, err := io.ReadAll(file)
 	if err != nil {
 		log.Fatalf("Error read file: %v", err)
 	}
+	return bytes
+}
+
+func getCPUName() string {
+	var unique []string
+	file := openFile("/proc/cpuinfo")
+	bytes := readFile(file)
 
 	data := strings.Split(string(bytes), "\n")
 	for _, row := range data {
@@ -69,11 +75,7 @@ func getCPUName() string {
 func readCPUData() []CpuData {
 	var cpus []CpuData
 	file := openFile("/proc/stat")
-
-	bytes, err := io.ReadAll(file)
-	if err != nil {
-		log.Fatalf("Error read file: %v", err)
-	}
+	bytes := readFile(file)
 
 	stats := strings.Split(string(bytes), "\n")
 
@@ -131,14 +133,10 @@ func calcCPUUsage(prev, curr CpuData) float64 {
 	return (totald - idled) / totald * 100
 }
 
-func readMemData() (MemData, error) {
+func readMemData() MemData {
 	var result MemData
 	file := openFile("/proc/meminfo")
-
-	bytes, err := io.ReadAll(file)
-	if err != nil {
-		log.Fatalf("Error read file: %v", err)
-	}
+	bytes := readFile(file)
 
 	data := strings.Split(string(bytes), "\n")
 	for _, row := range data {
@@ -152,7 +150,7 @@ func readMemData() (MemData, error) {
 		}
 	}
 	file.Close()
-	return result, err
+	return result
 }
 
 func main() {
@@ -160,7 +158,7 @@ func main() {
 		prev := readCPUData()
 		time.Sleep(1 * time.Second)
 		curr := readCPUData()
-		curr_mem, _ := readMemData()
+		curr_mem := readMemData()
 
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("%s\nMemory: %.2fG/%.1fG\n", getCPUName()[1:], float32((curr_mem.MemTotal-curr_mem.MemFree)/1024)*0.001, float32(curr_mem.MemTotal/1024)*0.001)
