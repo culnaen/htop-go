@@ -95,7 +95,7 @@ func readCPUData() []CpuData {
 			ioWaitPeriod := tryConvertToInt(data[5])
 			idlePeriod := tryConvertToInt(data[4])
 
-			cpu_data := CpuData{
+			cpuData := CpuData{
 				Name:          row[:5],
 				NicePeriod:    nicePeriod,
 				UserPeriod:    userPeriod,
@@ -107,7 +107,7 @@ func readCPUData() []CpuData {
 				IoWaitPeriod:  ioWaitPeriod,
 				IdlePeriod:    idlePeriod,
 			}
-			cpus = append(cpus, cpu_data)
+			cpus = append(cpus, cpuData)
 
 		}
 	}
