@@ -32,7 +32,7 @@ type MemData struct {
 func tryConvertToInt(value string) int {
 	result, err := strconv.Atoi(value)
 	if err != nil {
-		log.Printf("Error converting to integer: %v", err)
+		log.Fatalf("Error converting to integer: %v", err)
 		return 0
 	}
 	return result
@@ -41,7 +41,7 @@ func getCPUName() string {
 	var unique []string
 	file, err := os.Open("/proc/cpuinfo")
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalf("Error open file: %v", err)
 		os.Exit(1)
 	}
 	bytes, err := io.ReadAll(file)
@@ -136,7 +136,7 @@ func readMemData() (MemData, error) {
 	var result MemData
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalf("Error open file: %v", err)
 		os.Exit(1)
 	}
 	bytes, err := io.ReadAll(file)
