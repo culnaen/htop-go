@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+const (
+	ProcCpuinfoPath = "/proc/cpuinfo"
+	ProcStatPath    = "/proc/stat"
+	ProcMeminfoPath = "/proc/meminfo"
+	ProcUptimePath  = "/proc/uptime"
+)
+
 type CpuData struct {
 	Name          string
 	NicePeriod    int
@@ -58,7 +65,7 @@ func readFile(file *os.File) []byte {
 
 func getCPUName() string {
 	var unique []string
-	file := openFile("/proc/cpuinfo")
+	file := openFile(ProcCpuinfoPath)
 	bytes := readFile(file)
 
 	data := strings.Split(string(bytes), "\n")
@@ -76,7 +83,7 @@ func getCPUName() string {
 
 func readCPUData() []CpuData {
 	var cpus []CpuData
-	file := openFile("/proc/stat")
+	file := openFile(ProcStatPath)
 	bytes := readFile(file)
 
 	stats := strings.Split(string(bytes), "\n")
@@ -137,7 +144,7 @@ func calcCPUUsage(prev, curr CpuData) float64 {
 
 func readMemData() MemData {
 	var result MemData
-	file := openFile("/proc/meminfo")
+	file := openFile(ProcMeminfoPath)
 	bytes := readFile(file)
 
 	data := strings.Split(string(bytes), "\n")
@@ -160,7 +167,7 @@ func calcMemUsage(MemTotal, MemFree float32) float32 {
 }
 
 func readUptimeData() (int, int) {
-	file := openFile("/proc/uptime")
+	file := openFile(ProcUptimePath)
 	bytes := readFile(file)
 
 	data := strings.Split(strings.TrimSpace(string(bytes)), " ")
