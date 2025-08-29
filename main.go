@@ -37,13 +37,17 @@ func tryConvertToInt(value string) int {
 	}
 	return result
 }
-func getCPUName() string {
-	var unique []string
-	file, err := os.Open("/proc/cpuinfo")
+
+func openFile(path string) *os.File {
+	file, err := os.Open(path)
 	if err != nil {
 		log.Fatalf("Error open file: %v", err)
-		os.Exit(1)
 	}
+	return file
+}
+func getCPUName() string {
+	var unique []string
+	file := openFile("/proc/cpuinfo")
 	bytes, err := io.ReadAll(file)
 	if err != nil {
 		log.Fatalf("Error read file: %v", err)
@@ -64,12 +68,7 @@ func getCPUName() string {
 
 func readCPUData() []CpuData {
 	var cpus []CpuData
-	file, err := os.Open("/proc/stat")
-
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
+	file := openFile("/proc/stat")
 
 	bytes, err := io.ReadAll(file)
 	if err != nil {
@@ -134,11 +133,8 @@ func calcCPUUsage(prev, curr CpuData) float64 {
 
 func readMemData() (MemData, error) {
 	var result MemData
-	file, err := os.Open("/proc/meminfo")
-	if err != nil {
-		log.Fatalf("Error open file: %v", err)
-		os.Exit(1)
-	}
+	file := openFile("/proc/meminfo")
+
 	bytes, err := io.ReadAll(file)
 	if err != nil {
 		log.Fatalf("Error read file: %v", err)
