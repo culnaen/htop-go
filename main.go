@@ -160,15 +160,15 @@ func calcMemUsage(MemTotal, MemFree float32) float32 {
 }
 func main() {
 	for {
-		prev := readCPUData()
+		prevCpu := readCPUData()
 		time.Sleep(1 * time.Second)
-		curr := readCPUData()
+		currCpu := readCPUData()
 		currMem := readMemData()
 
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("%s\nMemory: %.2fG/%.1fG\n", getCPUName()[1:], calcMemUsage(currMem.MemTotal, currMem.MemFree), currMem.MemTotal)
-		for n, cpu := range curr {
-			fmt.Printf("CPU%d %.2f%%\n", n, calcCPUUsage(prev[n], cpu))
+		for n, cpu := range currCpu {
+			fmt.Printf("CPU%d %.2f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
 		}
 
 	}
