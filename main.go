@@ -185,7 +185,8 @@ func main() {
 		uptimeSystem, _ := readUptimeData()
 
 		fmt.Print("\033[H\033[2J")
-		fmt.Printf("%s\nMemory: %.2fG/%.1fG\n", getCPUName()[1:], calcMemUsage(currMem.MemTotal, currMem.MemFree), currMem.MemTotal)
+		fmt.Printf("CPU: %s\n", getCPUName()[1:])
+		fmt.Printf("Memory: %.2fG/%.1fG\n", calcMemUsage(currMem.MemTotal, currMem.MemFree), currMem.MemTotal)
 		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
 		for n, cpu := range currCpu {
 			fmt.Printf("CPU%d %.2f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
