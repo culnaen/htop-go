@@ -30,28 +30,30 @@ type MemData struct {
 }
 
 func tryConvertToInt(value string) int {
-	result, err := strconv.Atoi(value)
-	if err != nil {
+	if result, err := strconv.Atoi(value); err != nil {
 		log.Fatalf("Error converting to integer: %v", err)
 		return 0
+	} else {
+		return result
 	}
-	return result
 }
 
 func openFile(path string) *os.File {
-	file, err := os.Open(path)
-	if err != nil {
+	if file, err := os.Open(path); err != nil {
 		log.Fatalf("Error open file: %v", err)
+		return nil
+	} else {
+		return file
 	}
-	return file
 }
 
 func readFile(file *os.File) []byte {
-	bytes, err := io.ReadAll(file)
-	if err != nil {
+	if bytes, err := io.ReadAll(file); err != nil {
 		log.Fatalf("Error read file: %v", err)
+		return nil
+	} else {
+		return bytes
 	}
-	return bytes
 }
 
 func getCPUName() string {
