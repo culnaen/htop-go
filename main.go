@@ -158,15 +158,35 @@ func readMemData() MemData {
 func calcMemUsage(MemTotal, MemFree float32) float32 {
 	return MemTotal - MemFree
 }
+
+func readUptimeData() (int, int) {
+	file := openFile("/proc/uptime")
+	bytes := readFile(file)
+
+	data := strings.Split(strings.TrimSpace(string(bytes)), " ")
+
+	uptimeSystem, err := strconv.ParseFloat(data[0], 64)
+	if err != nil {
+		log.Fatalf("Error parsing uptime: %v", err)
+	}
+	idleTime, err := strconv.ParseFloat(data[1], 64)
+	if err != nil {
+		log.Fatalf("Error parsing idle: %v", err)
+	}
+	return int(uptimeSystem), int(idleTime)
+}
+
 func main() {
 	for {
 		prevCpu := readCPUData()
 		time.Sleep(1 * time.Second)
 		currCpu := readCPUData()
 		currMem := readMemData()
+		uptimeSystem, _ := readUptimeData()
 
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("%s\nMemory: %.2fG/%.1fG\n", getCPUName()[1:], calcMemUsage(currMem.MemTotal, currMem.MemFree), currMem.MemTotal)
+		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
 		for n, cpu := range currCpu {
 			fmt.Printf("CPU%d %.2f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
 		}
