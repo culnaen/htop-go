@@ -25,8 +25,8 @@ type CpuData struct {
 }
 
 type MemData struct {
-	MemTotal float32
-	MemFree  float32
+	MemTotal int
+	MemFree  int
 }
 
 func tryConvertToInt(value string) int {
@@ -144,11 +144,11 @@ func readMemData() MemData {
 	for _, row := range data {
 		if after, ok := strings.CutPrefix(row, "MemTotal:"); ok {
 			MemTotal := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
-			result.MemTotal = float32(MemTotal/1024) * 0.001
+			result.MemTotal = MemTotal
 		}
 		if after, ok := strings.CutPrefix(row, "MemFree:"); ok {
 			MemFree := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
-			result.MemFree = float32(MemFree/1024) * 0.001
+			result.MemFree = MemFree
 		}
 	}
 	file.Close()
@@ -182,11 +182,13 @@ func main() {
 		time.Sleep(1 * time.Second)
 		currCpu := readCPUData()
 		currMem := readMemData()
+		memTotalFloat := float32(currMem.MemTotal/1024) * 0.001
+		memFreeFloat := float32(currMem.MemFree/1024) * 0.001
 		uptimeSystem, _ := readUptimeData()
 
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("CPU: %s\n", getCPUName()[1:])
-		fmt.Printf("Memory: %.2fG/%.1fG\n", calcMemUsage(currMem.MemTotal, currMem.MemFree), currMem.MemTotal)
+		fmt.Printf("Memory: %.2fG/%.1fG\n", calcMemUsage(memTotalFloat, memFreeFloat), memTotalFloat)
 		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
 		for n, cpu := range currCpu {
 			fmt.Printf("CPU%d %.2f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
