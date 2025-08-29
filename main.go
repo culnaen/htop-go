@@ -140,12 +140,12 @@ func readMemData() MemData {
 
 	data := strings.Split(string(bytes), "\n")
 	for _, row := range data {
-		if strings.HasPrefix(row, "MemTotal:") {
-			MemTotal := tryConvertToInt(strings.TrimSpace(strings.Trim(strings.TrimPrefix(row, "MemTotal:"), "kB")))
+		if after, ok := strings.CutPrefix(row, "MemTotal:"); ok {
+			MemTotal := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
 			result.MemTotal = MemTotal
 		}
-		if strings.HasPrefix(row, "MemFree:") {
-			MemFree := tryConvertToInt(strings.TrimSpace(strings.Trim(strings.TrimPrefix(row, "MemFree:"), "kB")))
+		if after, ok := strings.CutPrefix(row, "MemFree:"); ok {
+			MemFree := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
 			result.MemFree = MemFree
 		}
 	}
