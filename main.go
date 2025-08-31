@@ -127,7 +127,7 @@ func readCPUData() []CpuData {
 	return cpus
 }
 
-func calcCPUUsage(prev, curr CpuData) float64 {
+func calcCPUUsage(prev, curr CpuData) float32 {
 	prevIdle := prev.IdlePeriod + prev.IoWaitPeriod
 	idle := curr.IdlePeriod + curr.IoWaitPeriod
 
@@ -136,8 +136,8 @@ func calcCPUUsage(prev, curr CpuData) float64 {
 	prevTotal := prevIdle + prevNonIdle
 	total := idle + nonIdle
 
-	totald := float64(total - prevTotal)
-	idled := float64(idle - prevIdle)
+	totald := float32(total - prevTotal)
+	idled := float32(idle - prevIdle)
 
 	if totald == 0 {
 		totald = 1
