@@ -94,8 +94,9 @@ func readCPUData() []CpuData {
 
 	for _, row := range stats[1:] {
 		if strings.Contains(row, "cpu") {
-			data := strings.Split(row[4:], " ")
+			data := strings.Fields(row)
 
+			name := data[0]
 			nicePeriod := tryConvertToInt(data[2])
 			userPeriod := tryConvertToInt(data[1])
 			systemPeriod := tryConvertToInt(data[3])
@@ -107,7 +108,7 @@ func readCPUData() []CpuData {
 			idlePeriod := tryConvertToInt(data[4])
 
 			cpuData := CpuData{
-				Name:          row[:5],
+				Name:          name,
 				NicePeriod:    nicePeriod,
 				UserPeriod:    userPeriod,
 				SystemPeriod:  systemPeriod,
