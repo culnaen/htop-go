@@ -40,7 +40,7 @@ type MemData struct {
 
 func tryConvertToInt(value string) int {
 	if result, err := strconv.Atoi(value); err != nil {
-		log.Fatalf("Error converting to integer: %v", err)
+		log.Printf("Error converting to integer: %v", err)
 		return 0
 	} else {
 		return result
@@ -49,7 +49,7 @@ func tryConvertToInt(value string) int {
 
 func openFile(path string) *os.File {
 	if file, err := os.Open(path); err != nil {
-		log.Fatalf("Error open file: %v", err)
+		log.Printf("Error open file: %v", err)
 		return nil
 	} else {
 		return file
@@ -58,7 +58,7 @@ func openFile(path string) *os.File {
 
 func readFile(file *os.File) []byte {
 	if bytes, err := io.ReadAll(file); err != nil {
-		log.Fatalf("Error read file: %v", err)
+		log.Printf("Error read file: %v", err)
 		return nil
 	} else {
 		return bytes
@@ -184,11 +184,11 @@ func readUptimeData() (int, int) {
 
 	uptimeSystem, err := strconv.ParseFloat(data[0], 64)
 	if err != nil {
-		log.Fatalf("Error parsing uptime: %v", err)
+		log.Printf("Error parsing uptime: %v", err)
 	}
 	idleTime, err := strconv.ParseFloat(data[1], 64)
 	if err != nil {
-		log.Fatalf("Error parsing idle: %v", err)
+		log.Printf("Error parsing idle: %v", err)
 	}
 	return int(uptimeSystem), int(idleTime)
 }
