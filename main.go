@@ -81,7 +81,7 @@ func getCPUName() string {
 		}
 	}
 
-	return strings.Split(unique[0], ":")[1]
+	return strings.TrimSpace(strings.Split(unique[0], ":")[1])
 }
 
 func readCPUData() []CpuData {
@@ -204,7 +204,7 @@ func main() {
 		uptimeSystem, _ := readUptimeData()
 
 		fmt.Print("\033[H\033[2J")
-		fmt.Printf("CPU: %s\n", getCPUName()[1:])
+		fmt.Printf("CPU: %s\n", getCPUName())
 		fmt.Printf("Memory: %.2fG/%.1fG\n", float32(calcMemUsage(currMem.MemTotal, currMem.MemAvailable, currMem.Buffers, currMem.Cached)/1024)*0.001, float32(currMem.MemTotal/1024)*0.001)
 		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
 		for n, cpu := range currCpu {
