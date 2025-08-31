@@ -68,6 +68,7 @@ func readFile(file *os.File) []byte {
 func getCPUName() string {
 	var unique []string
 	file := openFile(ProcCpuinfoPath)
+	defer file.Close()
 	bytes := readFile(file)
 
 	data := strings.Split(string(bytes), "\n")
@@ -79,13 +80,14 @@ func getCPUName() string {
 			}
 		}
 	}
-	file.Close()
+
 	return strings.Split(unique[0], ":")[1]
 }
 
 func readCPUData() []CpuData {
 	var cpus []CpuData
 	file := openFile(ProcStatPath)
+	defer file.Close()
 	bytes := readFile(file)
 
 	stats := strings.Split(string(bytes), "\n")
@@ -121,7 +123,6 @@ func readCPUData() []CpuData {
 		}
 	}
 
-	file.Close()
 	return cpus
 }
 
