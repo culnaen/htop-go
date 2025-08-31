@@ -208,7 +208,7 @@ func main() {
 		fmt.Printf("Memory: %.2fG/%.1fG\n", float32(calcMemUsage(currMem.MemTotal, currMem.MemAvailable, currMem.Buffers, currMem.Cached)/1024)*0.001, float32(currMem.MemTotal/1024)*0.001)
 		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
 		for n, cpu := range currCpu {
-			fmt.Printf("CPU%d %.2f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
+			fmt.Printf("CPU%d %.1f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
 		}
 
 	}
