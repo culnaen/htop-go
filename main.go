@@ -12,10 +12,12 @@ import (
 )
 
 const (
-	ProcCpuinfoPath = "/proc/cpuinfo"
-	ProcStatPath    = "/proc/stat"
-	ProcMeminfoPath = "/proc/meminfo"
-	ProcUptimePath  = "/proc/uptime"
+	Proc               = "/proc"
+	ProcCpuinfoPath    = "/proc/cpuinfo"
+	ProcStatPath       = "/proc/stat"
+	ProcMeminfoPath    = "/proc/meminfo"
+	ProcUptimePath     = "/proc/uptime"
+	ProcPIDCPUStatPath = "/proc/%d/stat"
 )
 
 type CpuData struct {
@@ -36,6 +38,13 @@ type MemData struct {
 	MemAvailable int
 	Buffers      int
 	Cached       int
+}
+
+type ProcessStat struct {
+	PID   int
+	Name  string
+	Utime int
+	Stime int
 }
 
 func tryConvertToInt(value string) int {
@@ -92,7 +101,7 @@ func readCPUData() []CpuData {
 
 	stats := strings.Split(string(bytes), "\n")
 
-	for _, row := range stats[1:] {
+	for _, row := range stats {
 		if strings.Contains(row, "cpu") {
 			data := strings.Fields(row)
 
@@ -127,7 +136,7 @@ func readCPUData() []CpuData {
 	return cpus
 }
 
-func calcCPUUsage(prev, curr CpuData) float32 {
+func calcCPUUsage(prev, curr CpuData) (float32, float32) {
 	prevIdle := prev.IdlePeriod + prev.IoWaitPeriod
 	idle := curr.IdlePeriod + curr.IoWaitPeriod
 
@@ -143,7 +152,7 @@ func calcCPUUsage(prev, curr CpuData) float32 {
 		totald = 1
 	}
 
-	return (totald - idled) / totald * 100
+	return totald, idled
 }
 
 func readMemData() MemData {
@@ -195,21 +204,90 @@ func readUptimeData() (int, int) {
 	return int(uptimeSystem), int(idleTime)
 }
 
+func getProcesses() []int {
+	var processes []int
+	if dirs, err := os.ReadDir(Proc); err != nil {
+		log.Printf("Error reading directory: %v", err)
+	} else {
+		for _, dir := range dirs {
+			if result, err := strconv.Atoi(dir.Name()); err != nil {
+				// pass
+			} else {
+				processes = append(processes, result)
+			}
+		}
+	}
+	return processes
+}
+
+func getProcessStat(pid int) ProcessStat {
+	file := openFile(fmt.Sprintf(ProcPIDCPUStatPath, pid))
+	data := readFile(file)
+
+	fields := strings.Fields(string(data))
+
+	processStat := ProcessStat{
+		PID:   tryConvertToInt(fields[0]),
+		Name:  fields[1],
+		Utime: tryConvertToInt(fields[13]),
+		Stime: tryConvertToInt(fields[14]),
+	}
+
+	return processStat
+}
+
 func main() {
 	for {
-		prevCpu := readCPUData()
+		prevCpuData := readCPUData()
+		prevProcesses := getProcesses()
+		prevCpu := prevCpuData[0]
+
+		prevProcessesWithStat := make(map[int]ProcessStat)
+		for _, process := range prevProcesses {
+			processStat := getProcessStat(process)
+			prevProcessesWithStat[processStat.PID] = processStat
+		}
 		time.Sleep(1 * time.Second)
-		currCpu := readCPUData()
+
+		currCpuData := readCPUData()
+		currCpu := currCpuData[0]
 		currMem := readMemData()
 		uptimeSystem, _ := readUptimeData()
+
+		processes := getProcesses()
+
+		var processesWithStat []ProcessStat
+		for _, process := range processes {
+			processStat := getProcessStat(process)
+			processesWithStat = append(processesWithStat, processStat)
+		}
+
+		total, _ := calcCPUUsage(prevCpu, currCpu)
+		period := total / float32(len(currCpuData)-1)
 
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("CPU: %s\n", getCPUName())
 		fmt.Printf("Memory: %.2fG/%.1fG\n", float32(calcMemUsage(currMem.MemTotal, currMem.MemAvailable, currMem.Buffers, currMem.Cached)/1024)*0.001, float32(currMem.MemTotal/1024)*0.001)
 		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
-		for n, cpu := range currCpu {
-			fmt.Printf("CPU%d %.1f%%\n", n, calcCPUUsage(prevCpu[n], cpu))
+		for n, cpu := range currCpuData[1:] {
+			totald, idled := calcCPUUsage(prevCpuData[n+1], cpu)
+			fmt.Printf("CPU%d %.1f%%\n", n, (totald-idled)/totald*100)
 		}
+		fmt.Print("PID    NAME    CPU%    MEM%\n")
+		for _, process := range processesWithStat {
+			lasttimes := prevProcessesWithStat[process.PID].Utime + prevProcessesWithStat[process.PID].Stime
+			currentTimes := process.Utime + process.Stime
 
+			var percentCpu float32
+			if currentTimes > lasttimes {
+				percentCpu = float32(currentTimes - lasttimes)
+			} else {
+				percentCpu = 0
+			}
+			percentCpu = percentCpu / float32(period) * 100.0
+			percentCpu = min(percentCpu, float32(len(currCpuData)*100.0))
+
+			fmt.Printf("%d    %s    %.1f%%\n", process.PID, process.Name, percentCpu)
+		}
 	}
 }
