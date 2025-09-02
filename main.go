@@ -13,14 +13,14 @@ import (
 
 const (
 	Proc               = "/proc"
-	ProcCpuinfoPath    = "/proc/cpuinfo"
+	ProcCPUinfoPath    = "/proc/cpuinfo"
 	ProcStatPath       = "/proc/stat"
 	ProcMeminfoPath    = "/proc/meminfo"
 	ProcUptimePath     = "/proc/uptime"
 	ProcPIDCPUStatPath = "/proc/%d/stat"
 )
 
-type CpuData struct {
+type CPUData struct {
 	Name          string
 	NicePeriod    int
 	UserPeriod    int
@@ -76,7 +76,7 @@ func readFile(file *os.File) []byte {
 
 func getCPUName() string {
 	var unique []string
-	file := openFile(ProcCpuinfoPath)
+	file := openFile(ProcCPUinfoPath)
 	defer file.Close()
 	bytes := readFile(file)
 
@@ -93,8 +93,8 @@ func getCPUName() string {
 	return strings.TrimSpace(strings.Split(unique[0], ":")[1])
 }
 
-func readCPUData() []CpuData {
-	var cpus []CpuData
+func readCPUData() []CPUData {
+	var cpus []CPUData
 	file := openFile(ProcStatPath)
 	defer file.Close()
 	bytes := readFile(file)
@@ -116,7 +116,7 @@ func readCPUData() []CpuData {
 			ioWaitPeriod := tryConvertToInt(data[5])
 			idlePeriod := tryConvertToInt(data[4])
 
-			cpuData := CpuData{
+			cpuData := CPUData{
 				Name:          name,
 				NicePeriod:    nicePeriod,
 				UserPeriod:    userPeriod,
@@ -136,7 +136,7 @@ func readCPUData() []CpuData {
 	return cpus
 }
 
-func calcCPUUsage(prev, curr CpuData) (float32, float32) {
+func calcCPUUsage(prev, curr CPUData) (float32, float32) {
 	prevIdle := prev.IdlePeriod + prev.IoWaitPeriod
 	idle := curr.IdlePeriod + curr.IoWaitPeriod
 
@@ -238,9 +238,9 @@ func getProcessStat(pid int) ProcessStat {
 
 func main() {
 	for {
-		prevCpuData := readCPUData()
+		prevCPUData := readCPUData()
 		prevProcesses := getProcesses()
-		prevCpu := prevCpuData[0]
+		prevCPU := prevCPUData[0]
 
 		prevProcessesWithStat := make(map[int]ProcessStat)
 		for _, process := range prevProcesses {
@@ -249,8 +249,8 @@ func main() {
 		}
 		time.Sleep(1 * time.Second)
 
-		currCpuData := readCPUData()
-		currCpu := currCpuData[0]
+		currCPUData := readCPUData()
+		currCPU := currCPUData[0]
 		currMem := readMemData()
 		uptimeSystem, _ := readUptimeData()
 
@@ -262,15 +262,15 @@ func main() {
 			processesWithStat = append(processesWithStat, processStat)
 		}
 
-		total, _ := calcCPUUsage(prevCpu, currCpu)
-		period := total / float32(len(currCpuData)-1)
+		total, _ := calcCPUUsage(prevCPU, currCPU)
+		period := total / float32(len(currCPUData)-1)
 
 		fmt.Print("\033[H\033[2J")
 		fmt.Printf("CPU: %s\n", getCPUName())
 		fmt.Printf("Memory: %.2fG/%.1fG\n", float32(calcMemUsage(currMem.MemTotal, currMem.MemAvailable, currMem.Buffers, currMem.Cached)/1024)*0.001, float32(currMem.MemTotal/1024)*0.001)
 		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
-		for n, cpu := range currCpuData[1:] {
-			totald, idled := calcCPUUsage(prevCpuData[n+1], cpu)
+		for n, cpu := range currCPUData[1:] {
+			totald, idled := calcCPUUsage(prevCPUData[n+1], cpu)
 			fmt.Printf("CPU%d %.1f%%\n", n, (totald-idled)/totald*100)
 		}
 		fmt.Print("PID    NAME    CPU%    MEM%\n")
@@ -278,16 +278,16 @@ func main() {
 			lasttimes := prevProcessesWithStat[process.PID].Utime + prevProcessesWithStat[process.PID].Stime
 			currentTimes := process.Utime + process.Stime
 
-			var percentCpu float32
+			var percentCPU float32
 			if currentTimes > lasttimes {
-				percentCpu = float32(currentTimes - lasttimes)
+				percentCPU = float32(currentTimes - lasttimes)
 			} else {
-				percentCpu = 0
+				percentCPU = 0
 			}
-			percentCpu = percentCpu / float32(period) * 100.0
-			percentCpu = min(percentCpu, float32(len(currCpuData)*100.0))
+			percentCPU = percentCPU / float32(period) * 100.0
+			percentCPU = min(percentCPU, float32(len(currCPUData)*100.0))
 
-			fmt.Printf("%d    %s    %.1f%%\n", process.PID, process.Name, percentCpu)
+			fmt.Printf("%d    %s    %.1f%%\n", process.PID, process.Name, percentCPU)
 		}
 	}
 }
