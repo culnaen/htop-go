@@ -39,9 +39,12 @@ type CPUData struct {
 
 type MemData struct {
 	MemTotal     int
+	MemFree      int
 	MemAvailable int
 	Buffers      int
 	Cached       int
+	SReclaimable int
+	Shmem        int
 }
 
 type ProcessStat struct {
@@ -171,6 +174,10 @@ func readMemData() MemData {
 			MemTotal := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
 			result.MemTotal = MemTotal
 		}
+		if after, ok := strings.CutPrefix(row, "MemFree:"); ok {
+			MemFree := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
+			result.MemFree = MemFree
+		}
 		if after, ok := strings.CutPrefix(row, "MemAvailable:"); ok {
 			MemAvailable := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
 			result.MemAvailable = MemAvailable
@@ -183,13 +190,32 @@ func readMemData() MemData {
 			Cached := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
 			result.Cached = Cached
 		}
+		if after, ok := strings.CutPrefix(row, "SReclaimable:"); ok {
+			SReclaimable := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
+			result.SReclaimable = SReclaimable
+		}
+		if after, ok := strings.CutPrefix(row, "Shmem:"); ok {
+			Shmem := tryConvertToInt(strings.TrimSpace(strings.Trim(after, "kB")))
+			result.Shmem = Shmem
+		}
 	}
 	file.Close()
 	return result
 }
 
-func calcMemUsage(MemTotal, MemFree, Buffers, Cached int) int {
-	return MemTotal - MemFree - Buffers - Cached
+func calcMemUsage(data MemData) float32 {
+	var used int
+
+	cached := data.Cached + data.SReclaimable - data.Shmem
+	usedDiff := data.MemFree + cached + data.SReclaimable + data.Buffers
+
+	if data.MemTotal >= usedDiff {
+		used = data.MemTotal - usedDiff
+	} else {
+		used = data.MemTotal - data.MemFree
+	}
+
+	return float32(used) / 1024 * 0.001
 }
 
 func readUptimeData() (int, int) {
@@ -264,7 +290,11 @@ func main() {
 	// memory render
 	memory := widgets.NewParagraph()
 	memory.Title = "Memory"
-	memory.Text = fmt.Sprintf("%.2fG/%.1fG", float32(calcMemUsage(currentMemory.MemTotal, currentMemory.MemAvailable, currentMemory.Buffers, currentMemory.Cached)/1024)*0.001, float32(currentMemory.MemTotal/1024)*0.001)
+	memory.Text = fmt.Sprintf(
+		"%.2fG/%.1fG",
+		calcMemUsage(currentMemory),
+		float32(currentMemory.MemTotal/1024)*0.001,
+	)
 	memory.SetRect(0, 3, 65, 6)
 
 	// CPUName render
@@ -383,7 +413,11 @@ func main() {
 
 			//memory
 			currentMemory = readMemData()
-			memory.Text = fmt.Sprintf("%.2fG/%.1fG", float32(calcMemUsage(currentMemory.MemTotal, currentMemory.MemAvailable, currentMemory.Buffers, currentMemory.Cached)/1024)*0.001, float32(currentMemory.MemTotal/1024)*0.001)
+			memory.Text = fmt.Sprintf(
+				"%.2fG/%.1fG",
+				calcMemUsage(currentMemory),
+				float32(currentMemory.MemTotal/1024)*0.001,
+			)
 
 			// cpu data
 			strTmp := ""
