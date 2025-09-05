@@ -406,12 +406,3 @@ func main() {
 		}
 	}
 }
-
-// 	currCPUData := readCPUData()
-
-// 	for n, cpu := range currCPUData[1:] {
-// 		totald, idled := calcCPUUsage(prevCPUData[n+1], cpu)
-// 		fmt.Printf("CPU%d %.1f%%\n", n, (totald-idled)/totald*100)
-// 	}
-// 	}
-// }
