@@ -6,9 +6,13 @@ import (
 	"log"
 	"os"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	ui "github.com/gizak/termui/v3"
+	"github.com/gizak/termui/v3/widgets"
 )
 
 const (
@@ -41,10 +45,11 @@ type MemData struct {
 }
 
 type ProcessStat struct {
-	PID   int
-	Name  string
-	Utime int
-	Stime int
+	PID      int
+	Name     string
+	Utime    int
+	Stime    int
+	CPUUsage float64
 }
 
 func tryConvertToInt(value string) int {
@@ -136,7 +141,7 @@ func readCPUData() []CPUData {
 	return cpus
 }
 
-func calcCPUUsage(prev, curr CPUData) (float32, float32) {
+func calcCPUUsage(prev, curr CPUData) (float64, float64) {
 	prevIdle := prev.IdlePeriod + prev.IoWaitPeriod
 	idle := curr.IdlePeriod + curr.IoWaitPeriod
 
@@ -145,8 +150,8 @@ func calcCPUUsage(prev, curr CPUData) (float32, float32) {
 	prevTotal := prevIdle + prevNonIdle
 	total := idle + nonIdle
 
-	totald := float32(total - prevTotal)
-	idled := float32(idle - prevIdle)
+	totald := float64(total - prevTotal)
+	idled := float64(idle - prevIdle)
 
 	if totald == 0 {
 		totald = 1
@@ -237,57 +242,176 @@ func getProcessStat(pid int) ProcessStat {
 }
 
 func main() {
+	charsPerLine := 65
+	var CPUDataString strings.Builder
+
+	if err := ui.Init(); err != nil {
+		log.Fatalf("failed to initialize termui: %v", err)
+	}
+	defer ui.Close()
+
+	// cpu usage
+	prevCPUData := readCPUData()
+	prevCPU := prevCPUData[0]
+
+	// cpu data render
+	cpuDataW := widgets.NewParagraph()
+	cpuDataW.SetRect(0, 6, 65, 15)
+
+	// memory usage
+	currentMemory := readMemData()
+
+	// memory render
+	memory := widgets.NewParagraph()
+	memory.Title = "Memory"
+	memory.Text = fmt.Sprintf("%.2fG/%.1fG", float32(calcMemUsage(currentMemory.MemTotal, currentMemory.MemAvailable, currentMemory.Buffers, currentMemory.Cached)/1024)*0.001, float32(currentMemory.MemTotal/1024)*0.001)
+	memory.SetRect(0, 3, 65, 6)
+
+	// CPUName render
+	CPUName := widgets.NewParagraph()
+	CPUName.Title = "CPU"
+	CPUName.Text = getCPUName()
+	CPUName.SetRect(0, 0, 65, 3)
+
+	// Uptime render
+	uptimew := widgets.NewParagraph()
+	uptimew.Title = "Uptime"
+	uptime, _ := readUptimeData()
+	uptimew.Text = (time.Duration(uptime) * time.Second).String()
+	uptimew.SetRect(50, 0, 65, 3)
+
+	// processes render
+	processes := widgets.NewTable()
+	processes.Rows = [][]string{
+		{"PID", "CPU%", "NAME"},
+	}
+	processes.TextStyle = ui.NewStyle(ui.ColorWhite)
+	processes.SetRect(0, 15, 65, 60)
+	processes.RowSeparator = true
+	processes.BorderStyle = ui.NewStyle(ui.ColorGreen)
+	processes.FillRow = true
+	processes.RowStyles[0] = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierBold)
+
+	// processes statistics
+	prevProcesses := getProcesses()
+	prevProcessesStats := make(map[int]ProcessStat)
+	for _, process := range prevProcesses {
+		processStat := getProcessStat(process)
+		prevProcessesStats[processStat.PID] = processStat
+	}
+
+	// render
+	ui.Render(CPUName, uptimew, memory, processes)
+
+	uiEvents := ui.PollEvents()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	for {
-		prevCPUData := readCPUData()
-		prevProcesses := getProcesses()
-		prevCPU := prevCPUData[0]
-
-		prevProcessesWithStat := make(map[int]ProcessStat)
-		for _, process := range prevProcesses {
-			processStat := getProcessStat(process)
-			prevProcessesWithStat[processStat.PID] = processStat
-		}
 		time.Sleep(1 * time.Second)
-
-		currCPUData := readCPUData()
-		currCPU := currCPUData[0]
-		currMem := readMemData()
-		uptimeSystem, _ := readUptimeData()
-
-		processes := getProcesses()
-
-		var processesWithStat []ProcessStat
-		for _, process := range processes {
-			processStat := getProcessStat(process)
-			processesWithStat = append(processesWithStat, processStat)
-		}
-
-		total, _ := calcCPUUsage(prevCPU, currCPU)
-		period := total / float32(len(currCPUData)-1)
-
-		fmt.Print("\033[H\033[2J")
-		fmt.Printf("CPU: %s\n", getCPUName())
-		fmt.Printf("Memory: %.2fG/%.1fG\n", float32(calcMemUsage(currMem.MemTotal, currMem.MemAvailable, currMem.Buffers, currMem.Cached)/1024)*0.001, float32(currMem.MemTotal/1024)*0.001)
-		fmt.Printf("Uptime: %v\n", time.Duration(uptimeSystem)*time.Second)
-		for n, cpu := range currCPUData[1:] {
-			totald, idled := calcCPUUsage(prevCPUData[n+1], cpu)
-			fmt.Printf("CPU%d %.1f%%\n", n, (totald-idled)/totald*100)
-		}
-		fmt.Print("PID    NAME    CPU%    MEM%\n")
-		for _, process := range processesWithStat {
-			lasttimes := prevProcessesWithStat[process.PID].Utime + prevProcessesWithStat[process.PID].Stime
-			currentTimes := process.Utime + process.Stime
-
-			var percentCPU float32
-			if currentTimes > lasttimes {
-				percentCPU = float32(currentTimes - lasttimes)
-			} else {
-				percentCPU = 0
+		select {
+		case e := <-uiEvents:
+			switch e.ID {
+			case "q", "<C-c>":
+				return
 			}
-			percentCPU = percentCPU / float32(period) * 100.0
-			percentCPU = min(percentCPU, float32(len(currCPUData)*100.0))
+		case <-ticker.C:
 
-			fmt.Printf("%d    %s    %.1f%%\n", process.PID, process.Name, percentCPU)
+			// cpu usage
+			currentCPUData := readCPUData()
+			currentCPU := currentCPUData[0]
+
+			totalPeriod, _ := calcCPUUsage(prevCPU, currentCPU)
+			periodPerCore := totalPeriod / float64(len(currentCPUData)-1)
+
+			prevCPU = currentCPU
+
+			// processes statistics
+			currentProcesses := getProcesses()
+
+			currentProcessesStats := make(map[int]ProcessStat)
+			for _, processStat := range currentProcesses {
+				processStat := getProcessStat(processStat)
+				currentProcessesStats[processStat.PID] = processStat
+			}
+
+			tmpProcesses := []ProcessStat{}
+
+			for pid, processStat := range currentProcessesStats {
+				_, exists := prevProcessesStats[pid]
+				if exists {
+					lasttimes := prevProcessesStats[pid].Utime + prevProcessesStats[pid].Stime
+					currentTimes := processStat.Utime + processStat.Stime
+
+					var percentCPU float64
+					if currentTimes > lasttimes {
+						percentCPU = float64(currentTimes - lasttimes)
+					} else {
+						percentCPU = 0
+					}
+					percentCPU = percentCPU / float64(periodPerCore) * 100.0
+					percentCPU = min(percentCPU, float64(len(currentCPUData)*100.0))
+					processStat.CPUUsage = percentCPU
+
+					tmpProcesses = append(tmpProcesses, processStat)
+				} else {
+					tmpProcesses = append(tmpProcesses, ProcessStat{PID: pid, Name: processStat.Name, Utime: 0, Stime: 0, CPUUsage: 0.0})
+				}
+			}
+
+			sort.Slice(tmpProcesses, func(i, j int) bool {
+				return tmpProcesses[i].CPUUsage > tmpProcesses[j].CPUUsage
+			})
+
+			clear(prevProcessesStats)
+			clear(processes.Rows)
+			processes.Rows = [][]string{
+				{"PID", "CPU%", "NAME"},
+			}
+			for _, tmpP := range tmpProcesses {
+				processes.Rows = append(processes.Rows, []string{
+					strconv.Itoa(tmpP.PID),
+					strconv.FormatFloat(tmpP.CPUUsage, 'f', 1, 32),
+					tmpP.Name,
+				})
+				prevProcessesStats[tmpP.PID] = tmpP
+			}
+
+			// uptime
+			uptime, _ := readUptimeData()
+			uptimew.Text = (time.Duration(uptime) * time.Second).String()
+
+			//memory
+			currentMemory = readMemData()
+			memory.Text = fmt.Sprintf("%.2fG/%.1fG", float32(calcMemUsage(currentMemory.MemTotal, currentMemory.MemAvailable, currentMemory.Buffers, currentMemory.Cached)/1024)*0.001, float32(currentMemory.MemTotal/1024)*0.001)
+
+			// cpu data
+			strTmp := ""
+			for n, cpu := range currentCPUData[1:] {
+				totald, idled := calcCPUUsage(prevCPUData[n+1], cpu)
+				cpuusage := strconv.FormatFloat((totald-idled)/totald*100, 'f', 1, 32)
+				strTmp += "CPU" + strconv.Itoa(n) + " " + cpuusage + "%   "
+
+			}
+			for i, r := range strTmp {
+				CPUDataString.WriteRune(r)
+				if (i+i)%charsPerLine == 0 && i != len(strTmp)-1 {
+					CPUDataString.WriteString("\n")
+				}
+			}
+			prevCPUData = currentCPUData
+			cpuDataW.Text = strTmp
+
+			ui.Render(CPUName, cpuDataW, uptimew, memory, processes)
 		}
 	}
 }
+
+// 	currCPUData := readCPUData()
+
+// 	for n, cpu := range currCPUData[1:] {
+// 		totald, idled := calcCPUUsage(prevCPUData[n+1], cpu)
+// 		fmt.Printf("CPU%d %.1f%%\n", n, (totald-idled)/totald*100)
+// 	}
+// 	}
+// }
