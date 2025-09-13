@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	ui "github.com/gizak/termui/v3"
@@ -16,12 +17,14 @@ import (
 )
 
 const (
-	Proc               = "/proc"
-	ProcCPUinfoPath    = "/proc/cpuinfo"
-	ProcStatPath       = "/proc/stat"
-	ProcMeminfoPath    = "/proc/meminfo"
-	ProcUptimePath     = "/proc/uptime"
-	ProcPIDCPUStatPath = "/proc/%d/stat"
+	Proc                = "/proc"
+	ProcCPUinfoPath     = "/proc/cpuinfo"
+	ProcStatPath        = "/proc/stat"
+	ProcMeminfoPath     = "/proc/meminfo"
+	ProcUptimePath      = "/proc/uptime"
+	ProcPIDCPUStatPath  = "/proc/%d/stat"
+	ProcPIDCPUStatMPath = "/proc/%d/statm"
+	ONE_K               = 1024
 )
 
 type CPUData struct {
@@ -53,6 +56,16 @@ type ProcessStat struct {
 	Utime    int
 	Stime    int
 	CPUUsage float64
+}
+
+type ProcessStatM struct {
+	size     int // VmSize
+	resident int //VmRSS
+	shared   int // RssFile+RssShmem
+	text     int
+	lib      int // 0
+	data     int
+	dt       int // 0
 }
 
 func tryConvertToInt(value string) int {
@@ -101,7 +114,7 @@ func getCPUName() string {
 	return strings.TrimSpace(strings.Split(unique[0], ":")[1])
 }
 
-func readCPUData() []CPUData {
+func getCPUData() []CPUData {
 	var cpus []CPUData
 	file := openFile(ProcStatPath)
 	defer file.Close()
@@ -163,7 +176,7 @@ func calcCPUUsage(prev, curr CPUData) (float64, float64) {
 	return totald, idled
 }
 
-func readMemData() MemData {
+func getMemData() MemData {
 	var result MemData
 	file := openFile(ProcMeminfoPath)
 	bytes := readFile(file)
@@ -218,7 +231,7 @@ func calcMemUsage(data MemData) float32 {
 	return float32(used) / 1024 * 0.001
 }
 
-func readUptimeData() (int, int) {
+func getUptimeData() (int, int) {
 	file := openFile(ProcUptimePath)
 	bytes := readFile(file)
 
@@ -267,6 +280,25 @@ func getProcessStat(pid int) ProcessStat {
 	return processStat
 }
 
+func getProcessStatM(pid int) ProcessStatM {
+	var result ProcessStatM
+	file := openFile(fmt.Sprintf(ProcPIDCPUStatMPath, pid))
+	bytes := readFile(file)
+
+	fields := strings.Fields(string(bytes))
+
+	result = ProcessStatM{
+		size:     tryConvertToInt(fields[0]),
+		resident: tryConvertToInt(fields[1]),
+		shared:   tryConvertToInt(fields[2]),
+		text:     tryConvertToInt(fields[3]),
+		lib:      tryConvertToInt(fields[4]),
+		data:     tryConvertToInt(fields[5]),
+		dt:       tryConvertToInt(fields[6]),
+	}
+	return result
+}
+
 func main() {
 	charsPerLine := 65
 	var CPUDataString strings.Builder
@@ -276,8 +308,10 @@ func main() {
 	}
 	defer ui.Close()
 
+	pageSize := syscall.Getpagesize() / ONE_K
+
 	// cpu usage
-	prevCPUData := readCPUData()
+	prevCPUData := getCPUData()
 	prevCPU := prevCPUData[0]
 
 	// cpu data render
@@ -285,7 +319,7 @@ func main() {
 	cpuDataW.SetRect(0, 6, 65, 15)
 
 	// memory usage
-	currentMemory := readMemData()
+	currentMemory := getMemData()
 
 	// memory render
 	memory := widgets.NewParagraph()
@@ -306,21 +340,21 @@ func main() {
 	// Uptime render
 	uptimew := widgets.NewParagraph()
 	uptimew.Title = "Uptime"
-	uptime, _ := readUptimeData()
+	uptime, _ := getUptimeData()
 	uptimew.Text = (time.Duration(uptime) * time.Second).String()
 	uptimew.SetRect(50, 0, 65, 3)
 
 	// processes render
 	processes := widgets.NewTable()
 	processes.Rows = [][]string{
-		{"PID", "CPU%", "NAME"},
+		{"PID", "CPU%", "Mem", "NAME"},
 	}
 	processes.TextStyle = ui.NewStyle(ui.ColorWhite)
 	processes.SetRect(0, 15, 65, 60)
 	processes.RowSeparator = true
 	processes.BorderStyle = ui.NewStyle(ui.ColorGreen)
 	processes.FillRow = true
-	processes.RowStyles[0] = ui.NewStyle(ui.ColorWhite, ui.ColorBlack, ui.ModifierBold)
+	processes.RowStyles[0] = ui.NewStyle(ui.ColorWhite)
 
 	// processes statistics
 	prevProcesses := getProcesses()
@@ -348,13 +382,21 @@ func main() {
 		case <-ticker.C:
 
 			// cpu usage
-			currentCPUData := readCPUData()
+			currentCPUData := getCPUData()
 			currentCPU := currentCPUData[0]
 
 			totalPeriod, _ := calcCPUUsage(prevCPU, currentCPU)
 			periodPerCore := totalPeriod / float64(len(currentCPUData)-1)
 
 			prevCPU = currentCPU
+
+			//memory
+			currentMemory = getMemData()
+			memory.Text = fmt.Sprintf(
+				"%.2fG/%.1fG",
+				calcMemUsage(currentMemory),
+				float32(currentMemory.MemTotal/1024)*0.001,
+			)
 
 			// processes statistics
 			currentProcesses := getProcesses()
@@ -395,29 +437,28 @@ func main() {
 
 			clear(prevProcessesStats)
 			clear(processes.Rows)
+			// processes stat cpu + mem
 			processes.Rows = [][]string{
-				{"PID", "CPU%", "NAME"},
+				{"PID", "CPU%", "Mem%", "NAME"},
 			}
+
 			for _, tmpP := range tmpProcesses {
+
+				procStatM := getProcessStatM(tmpP.PID)
+				procMemoryUsage := float64(procStatM.resident/pageSize) / float64(currentMemory.MemTotal) * 100
+
 				processes.Rows = append(processes.Rows, []string{
 					strconv.Itoa(tmpP.PID),
 					strconv.FormatFloat(tmpP.CPUUsage, 'f', 1, 32),
+					strconv.FormatFloat(procMemoryUsage, 'f', 1, 32),
 					tmpP.Name,
 				})
 				prevProcessesStats[tmpP.PID] = tmpP
 			}
 
 			// uptime
-			uptime, _ := readUptimeData()
+			uptime, _ := getUptimeData()
 			uptimew.Text = (time.Duration(uptime) * time.Second).String()
-
-			//memory
-			currentMemory = readMemData()
-			memory.Text = fmt.Sprintf(
-				"%.2fG/%.1fG",
-				calcMemUsage(currentMemory),
-				float32(currentMemory.MemTotal/1024)*0.001,
-			)
 
 			// cpu data
 			strTmp := ""
